@@ -1,0 +1,681 @@
+	.TITLE F4CHOR
+	.RADIX 16
+	.SBTTL ******************************
+	.SBTTL * PROGRAMMER: GREG R.        *
+   	.SBTTL *	     (MIKE ALBAUGH) *
+	.SBTTL * CHECKER:                   *
+	.SBTTL *                            *
+	.SBTTL ******************************
+;
+;DATE INITIATED:	22-MAR-78
+;
+;PROJECT CHARGE #:	178XX
+;
+;DISK #:		102
+;
+;HARDWARE REQUIREMENTS:	MONSTER MAN (FOR DETAILS SEE FILE FUTBAL.MAC)
+;
+;MEMORY REQUIREMENTS:	THIS SEGMENT -1K ROM
+;
+;INTERRUPT REQUIREMENTS:-NONE
+;
+;ASSEMBLY COMMAND STRING:  *F4CHOR,F4CHOR=F4CHOR
+;
+;LINK COMMAND STRING:	*PP:/L,RK1:F4MAP.LST/A=F4BALL,F4CHOR,F4COIN,F4INT
+;
+;PROGRAM DESCRIPTION:	MACROS AND TABLES FOR PLAY-CHOREOGRAPHY IN
+;			MONSTER-MAN.  USED BY ROUTINES IN F4BAL
+;
+	.GLOBL	PTBL,PLTAB,FBCEND,FTAB,HTAB,GOTABL
+
+	.SBTTL DEFINITIONS
+
+	.MACRO END
+	.BYTE 0			;END OF THIS MAN'S SEQUENCE
+	.ENDM
+
+	.MACRO JOY ATR
+	.IF B,ATR
+	.BYTE 1,0		;THIS MAN CONTROLLED WITH JOYSTICK, OR DEAD IN ATTRACT
+	.IFF
+	.BYTE 1,ATR-.-1		;JOYSTICK, OR ROUTINE "ATR" IN ATTRACT
+	.ENDC
+	.ENDM
+
+	.MACRO WAIT M
+	.BYTE 2,M		;WAIT FOR GLOBAL FLAGS UNDER MASK M
+	.ENDM
+
+	.MACRO SET F		;SET GLOBAL FLAG F
+	.BYTE 3,F
+	.ENDM
+
+	.MACRO TRACK N
+	.IF NE,N
+	.BYTE 4,N*4+32.		;N*4 WITH "OPPONENT" BIT SET
+	.IFF
+	.BYTE 4,0		;BALL BELONGS TO NEITHER SIDE
+	.ENDC
+	.ENDM
+
+	.MACRO BLOCK N,A
+	.BYTE 5,A*16.+N+8*4&255.+<A/4>	;BLOCK OPPON. "N" FROM ALLY "A"
+	.ENDM
+
+
+	.MACRO PASS LEN,REC		;LEN=LENGTH(MAX), REC=RECEIVER
+	.IIF IDN,L,LEN, ..1=128.
+	.IIF IDN,S,LEN, ..1=0
+	.BYTE 6,..1+REC
+	.ENDM
+
+	.MACRO JOYR ATR			;RIGHT HAND JOYSTICK
+	.IF B,ATR
+	.BYTE 7,0
+	.IFF
+	.BYTE 7,ATR-.-1
+	.ENDC
+	.ENDM
+
+	.MACRO MOVE H,V
+	.BYTE V'.+128.,H'.	;BIASED V-POSN, STRAIGHT H
+	.ENDM
+	
+	.MACRO KICK REC		;SPECIAL KICK PROCESSING
+	.BYTE 9,REC
+	.ENDM
+
+	.MACRO UNTIL MSK	;KEEP EXECUTING UNTIL WFLAG AND MSK IS TRUE
+	.BYTE 8.,MSK
+	.ENDM
+
+	.MACRO FLAGV F		;OR IN INDIVIDUAL FLAGS F
+	.BYTE 10.,F
+	.ENDM
+
+	.MACRO FLAGA M		;AND INDIVIDUAL FLAG MASK
+	.BYTE 11.,M
+	.ENDM
+
+	.MACRO GOTO ADR		;GO TO ADDRESS ADR IN COMMON SECTION.
+	.BYTE 12.,ADR-GOTABL-1
+	.ENDM
+				;---
+				;WAIT AND UNTIL MASKS
+MSPASS	=10			;START PASS
+MFPASS	=008			;FINISH PASS
+MDPASS	=18			;DOING OR DID PASS
+MSCRIM	=004			;BALL CARRIER PAST SCRIMMAGE
+MSYNC	=80			;SYNCHRONIZE DEFENSE
+;THESE SET MEN IN FORMATION
+
+FTAB:	MOVE -16,56		;OFFENSE #1
+	MOVE -8,24		;DEFENSE #1
+	MOVE -8,16		;O 2
+	MOVE -8,8		;D 2
+	MOVE -8,0		;O 3
+	MOVE -8,-8		;D 3
+	MOVE -8,-16		;O 4
+	MOVE -8,-24		;D 4
+	MOVE -8,-32		;O 5
+	MOVE -24,-40		;D 5
+	MOVE -16,0		;O 6
+	MOVE -24,40		;D 6
+	MOVE -8,32		;O 7
+	MOVE -32,0		;D 7
+HTAB:	MOVE -39,12		;SET MEN IN HUDDLE
+	MOVE -30,5
+	MOVE -30,-5
+	MOVE -39,-12
+	MOVE -48,-10
+	MOVE -54,0
+	MOVE -48,10
+	MOVE 0,0		;SET BALL ON SCRIMMAGE LINE
+PLTAB: .BYTE 30.,70.		;LENGTH OF PASS FOR SHORT/LONG PASSES
+;TABLE OF PLAYS (-1 BECAUSE MCC IS PRE-INCREMENTED)
+PTBL:
+	O.DWNI-1,D.DWNI-1	;WIDE TO LEFT PLAYER
+	O.DWNO-1,D.DWNO-1	;DOWN & OUT TO LEFT PLAYER
+	O.PASL-1,D.PASL-1	;LONG PASS TO DRONE
+	O.PASS-1,D.PASS-1	;SHORT PASS TO DRONE
+	O.KICK-1,D.KICK-1	;PUNT OR FIELD GOAL ATTEMPT
+O.PASL:
+				;LONG PASS TO DRONE ON RIGHT. LEFT MAN BLOCKS
+				;----
+				;#1
+	MOVE -16,56		;
+	JOYR			;
+	WAIT 1			;
+	BLOCK 5,0		;
+	END			;----
+				;#2
+	WAIT 1			;
+	BLOCK 3,0		;
+	END			;----
+				;#3
+	WAIT 1			;
+	BLOCK 2,0		;
+	END			;----
+				;#4
+	WAIT 1			;
+	BLOCK 1,0		;
+	END			;----
+				;#5
+	WAIT 1			;
+	UNTIL MSCRIM!MFPASS
+	MOVE 0,-48		;
+	MOVE 127,-48		;
+	WAIT 0			;
+	UNTIL MFPASS
+	BLOCK 6,6
+	UNTIL 0
+	JOY			;
+	MOVE 127,-48		;GO FOR THE GOAL LINE
+	END			;----
+				;#6
+	WAIT 2			;
+	JOY 6$			;
+	BLOCK 6,5		;
+	END			;----
+				;#7
+	WAIT 1			;
+	BLOCK 4,0		;
+	END			;----
+				;BALL
+	MOVE 0,0		;
+	WAIT 1			;
+	MOVE -16,0		;
+	SET 2			;
+	PASS L,5		;
+	END			;----
+6$:				;#6, ATTRACT
+	MOVE -64,0		;
+	SET MSPASS			;
+	BLOCK 6,5		;
+	END			;----
+D.PASL:				;----
+	WAIT 1			;#1
+	MOVE -8,56		;
+	GOTO D.FL5
+	END			;----
+				;#2
+	WAIT 1			;
+	MOVE -8,32		;
+	TRACK 6			;
+	END			;----
+				;#3
+	WAIT 1			;
+	MOVE -8,8		;
+	TRACK 6			;
+	END			;----
+				;#4
+	WAIT 1			;
+	MOVE -8,-16		;
+	GOTO D.FL1
+	END			;----
+				;#5
+	MOVE -24,-40		;
+	JOY			;
+	WAIT 1			;
+	TRACK 0			;
+	END			;----
+				;#6
+	MOVE -24,40		;
+	JOYR			;
+	WAIT 1			;
+	MOVE -8,76		;
+	TRACK 0			;
+	END			;----
+				;#7
+	WAIT 1			;
+	MOVE -32,32
+	GOTO D.5PAS
+	END			;----
+				;----
+	.PAGE
+				;----
+O.PASS:				;PASS TO RIGHT DRONE, DOING DOWN AND OUT
+				;----
+	MOVE -16,56		;#1
+	JOYR			;
+	WAIT 1			;
+	BLOCK 5,0		;
+	END			;----
+				;#2
+	WAIT 1			;
+	BLOCK 3,0		;
+	END			;----
+				;#3
+	WAIT 1			;
+	BLOCK 2,0		;
+	END			;----
+				;#4
+	WAIT 1			;
+	BLOCK 1,0		;
+	END			;----
+				;#5
+	WAIT 1			;
+	UNTIL MSCRIM!MDPASS
+	MOVE 0,-48		;
+	MOVE 40,-48		;
+	MOVE 40,-80		;
+	WAIT 0			;
+	UNTIL MDPASS
+	BLOCK 6,6
+	UNTIL 0
+	JOY			;
+	UNTIL MFPASS		;IN ATTRACT, MOVE TO SIDELINE UNTIL
+	MOVE 40,-80		;BALL IS CAUGHT
+	UNTIL 0
+	MOVE 127,-80		;
+	END			;----
+				;#6
+	WAIT 2			;
+	JOY 1$			;
+	BLOCK 6,5		;
+	END			;----
+				;#7
+	WAIT 1			;
+	BLOCK 4,0		;
+	END			;----
+				;BALL
+	MOVE 0,0		;
+	WAIT 1			;
+	MOVE -16,0		;
+	SET 2			;
+	PASS S,5		;
+	END			;----
+1$:				;#6, ATTRACT
+	MOVE -64,0		;
+	SET MSPASS		;
+	BLOCK 6,5		;
+	END			;----
+				;----
+D.PASS:				;----
+				;#1
+	WAIT 1			;
+	UNTIL MSYNC!MSCRIM
+	FLAGV 08
+	BLOCK 5,0
+	UNTIL 0
+	FLAGA 0F7
+	GOTO D.FL5
+	END			;----
+				;#2
+	WAIT 1			;
+	MOVE -8,-8		;
+	TRACK 6			;
+	END			;----
+				;#3
+	WAIT 1			;
+	MOVE -8,-32		;
+	TRACK 6			;
+	END			;----
+				;#4
+	WAIT 1			;
+	MOVE -8,-56		;
+	GOTO D.FL1
+	END			;----
+				;#5
+	MOVE -24,-40		;
+	JOY			;
+	WAIT 1			;
+	MOVE -8,-64		;
+	TRACK 0			;
+	END			;----
+				;#6
+	MOVE -24,40		;
+	JOYR			;
+	WAIT 1			;
+	TRACK 0			;
+	END			;----
+				;#7
+	WAIT 20			;
+	MOVE -32,32
+	WAIT 1
+	FLAGV 08
+	MOVE -12,40
+	SET MSYNC
+	GOTO D.5PAS
+	END			;----
+	.PAGE
+				;----
+O.DWNO:				;SLANT IN TO PLAYER #1. RIGHT DRONE FAKES A D+O
+				;----
+				;#1
+	MOVE -16,56		;
+	JOYR			;
+	GOTO O.DO1		;
+	END			;----
+				;#2
+	WAIT 1			;
+	BLOCK 3,0		;
+	END			;----
+				;#3
+	WAIT 1			;
+	BLOCK 2,0		;
+	END			;----
+				;#4
+	WAIT 1			;
+	BLOCK 1,0		;
+	END			;----
+				;#5
+	WAIT 1			;
+	UNTIL MSCRIM!MDPASS
+	MOVE 0,-48		;
+	MOVE 40,-48
+	MOVE 40,-80
+	WAIT 0
+	UNTIL 0
+	BLOCK 6,0
+	END			;----
+				;#6
+	WAIT 2			;
+	JOY 6$			;
+	BLOCK 5,1		;
+	END			;----
+				;#7
+	WAIT 1			;
+	BLOCK 4,0		;
+	END			;----
+				;BALL
+	MOVE 0,0		;
+	GOTO O.FL0		;
+	END			;----
+6$:				;#6, ATTRACT
+	MOVE -64,0		;
+	SET MSPASS		;
+	BLOCK 5,1		;
+	END			;----
+				;----
+D.DWNO:				;#1
+	WAIT 1			;
+	MOVE -8,40		;
+	GOTO D.FL5
+	END			;----
+				;#2
+	WAIT 1			;
+	MOVE -8,12		;
+	TRACK 6			;
+	END			;----
+				;#3
+	WAIT 1			;
+	MOVE -8,-12		;
+	TRACK 6			;
+	END			;----
+				;#4
+	WAIT 1			;
+	MOVE -8,-40		;
+	GOTO D.FL1
+	END			;----
+				;#5
+	MOVE -24,-40		;
+	JOY			;
+	WAIT 1			;
+	MOVE 0,-56		;
+	TRACK 0			;
+	END			;----
+				;#6
+	MOVE -24,40		;
+	JOYR			;
+	WAIT 1			;
+	MOVE -8,72		;
+	TRACK 0			;
+	END			;----
+				;#7
+	WAIT 1			;
+	GOTO D.1PAS
+	END			;----
+				;----
+	.PAGE
+O.DWNI:				;WIDE SLANT OUT TO PLAYER #1;RIGHT DRONE FAKES A BOMB
+				;----
+				;#1
+	MOVE -16,56		;
+	UNTIL MSCRIM!MFPASS
+	JOYR			;
+	WAIT 20
+	MOVE -16,79
+	WAIT 1			;
+	MOVE 40,80		;
+	WAIT 0			;
+	UNTIL MFPASS
+	JOYR
+	BLOCK 5,6
+	UNTIL 0
+	JOYR
+	JOY
+	MOVE 127,80		;
+	END			;----
+				;#2
+	WAIT 1			;
+	BLOCK 3,0		;
+	END			;----
+				;#3
+	WAIT 1			;
+	BLOCK 2,0		;
+	END			;----
+				;#4
+	WAIT 1			;
+	BLOCK 1,0		;
+	END			;----
+				;#5
+	WAIT 1			;
+	UNTIL MSCRIM!MDPASS
+	MOVE 0,-48
+	MOVE 127,-48
+	WAIT 0
+	UNTIL 0
+	BLOCK 6,0
+	END			;----
+				;#6
+	WAIT 2			;
+	JOY O.DI6			;
+	BLOCK 5,1		;
+	END			;----
+				;#7
+	WAIT 1			;
+	BLOCK 4,0		;
+	END			;----
+				;BALL
+	MOVE 0,0		;
+	GOTO O.FL0		;
+	END			;----
+O.DI6:				;#6, ATTRACT
+	MOVE -16,0		;
+	SET MSPASS		;
+	BLOCK 5,1		;
+	END			;----
+D.DWNI:			;
+				;#1
+	WAIT 1			;
+	MOVE -8,56		;
+	GOTO D.FL5
+	END			;---
+	
+				;#2
+	WAIT 1			;
+	MOVE -8,32		;
+	TRACK 6			;
+	END			;---
+	
+				;#3
+	WAIT 1			;
+	MOVE -8,8		;
+	TRACK 6			;
+	END			;
+	
+				;#4
+	WAIT 1			;
+	MOVE -8,-16		;
+	GOTO D.FL1
+	END			;---
+	
+				;#5
+	MOVE -24,-40
+	JOY			;
+	WAIT 1			;
+	TRACK 0
+	END			;---
+	
+				;#6
+	MOVE -24,40		;
+	JOYR			;
+	WAIT 1			;
+	MOVE -8,76
+	TRACK 0
+	END			;---
+	
+				;#7
+	WAIT 20			;
+	MOVE -24,-79		;
+	WAIT 1
+	GOTO D.1PASS
+	END			;---
+				;---
+
+O.KICK:				;PUNT OR FIELD GOAD ATTEMPT
+				;---
+				;#1
+	MOVE -16,56		;
+	JOYR			;
+	WAIT 20
+	MOVE -16,40		;
+	WAIT 1			;
+	BLOCK 5,0		;
+	END			;---
+	
+				;#2
+	WAIT 1			;
+	BLOCK 3,0		;
+	END			;---
+	
+				;#3
+	WAIT 1			;
+	BLOCK 2,0		;
+	END			;
+	
+				;#4
+	WAIT 1			;
+	BLOCK 1,0		;
+	END			;---
+	
+				;#5
+	WAIT 1			;
+	BLOCK 6,0		;
+	END			;---
+	
+				;#6
+	WAIT 20
+	MOVE -50,0		;
+	WAIT 2			;
+	JOY 6$			;
+	JOY			;
+	BLOCK 7,0		;
+	END			;---
+	
+				;#7
+	WAIT 1			;
+	BLOCK 4,0		;
+	END			;---
+	
+				;BALL
+	MOVE 0,0		;
+	WAIT 1			;
+	MOVE -50,0		;
+	SET 2			;
+	KICK 6			;
+	END			;---
+6$:				;	
+				;#6 ATTRACT
+	SET MSPASS		;
+	BLOCK 7,0		;
+	END			;---
+				;---
+D.KICK:				;
+				;#1
+	WAIT 1			;
+	MOVE -8,56		;
+	GOTO D.FL5
+	END			;----
+				;#2
+	WAIT 1			;
+	MOVE -8,24		;
+	TRACK 6			;
+	END			;----
+				;#3
+	WAIT 1			;
+	MOVE -8,-24		;
+	TRACK 6			;
+	END			;----
+				;#4
+	WAIT 1			;
+	MOVE -8,-56		;
+	GOTO D.FL1
+	END			;----
+				;#5
+	MOVE -24,-40		;
+	JOY			;
+	WAIT 1			;
+	BLOCK 1,0		;
+	END			;----
+				;#6
+	MOVE -24,40		;
+	JOYR			;
+	WAIT 1			;
+	MOVE 0,76		;
+	TRACK 0			;
+	END			;----
+				;#7
+	WAIT 1			;
+	FLAGV 08
+	MOVE 0,0		;
+	BLOCK 6,0
+	END			;----
+				;----
+	.PAGE
+GOTABL	=.-1			;GOTO TABLE OF COMMON ROUTINES.
+				;---
+O.DO1:				; OFFENSE,#1
+	UNTIL MSCRIM!MFPASS
+	WAIT 1			;
+1$:				;
+	MOVE 40,0		;
+	MOVE 40,-79		;
+	GOTO 1$			;
+	UNTIL MFPASS
+	BLOCK 5,6
+	UNTIL 0
+	JOY
+	MOVE 127,80		;
+O.FL0:			; OFFENSE, FLEA FLICKER, BALL
+	WAIT 1			;
+	MOVE -16,0		;
+	SET 2			;
+8$:	PASS S,1		;
+	PASS S,6		;
+	GOTO 8$			;
+				;
+D.FL1:				; DEFENSE, FLEA FLICKER, LINEMEN
+	UNTIL MDPASS		;
+	TRACK 6			;
+	UNTIL 0			;
+	TRACK 1			;
+D.5PAS:	FLAGV 08		;DEFENSE PASS COVERAGE ON #5
+	BLOCK 5,0
+D.1PAS:	FLAGV 08		;DEFENSE, PASS COVERAGE ON #1
+	BLOCK 1,0
+D.FL5:				;DEFENSE, PASS TO #5, LINEMAN
+	UNTIL MDPASS
+	TRACK 6
+	UNTIL MFPASS
+	TRACK 5
+	UNTIL 0
+	TRACK 0
+	.REPT 30		;ROOM FOR EXPANDING
+	.BYTE 0
+	.ENDR
+	.PAGE
+FBCEND:
+	.END
+                                                                                                                                                                                             
